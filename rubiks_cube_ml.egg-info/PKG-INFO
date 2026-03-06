@@ -1,0 +1,93 @@
+Metadata-Version: 2.4
+Name: rubiks_cube_ml
+Version: 0.1.0
+Summary: Machine learning project for solving Rubik's Cube
+Author: Will
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: matplotlib>=3.5.0
+Requires-Dist: torch>=1.10.0
+Requires-Dist: gymnasium>=0.28.0
+Requires-Dist: stable-baselines3>=2.0.0
+Requires-Dist: tensorboard>=2.7.0
+Requires-Dist: tqdm>=4.62.0
+Requires-Dist: matplotlib-inline>=0.1.3
+Requires-Dist: seaborn>=0.11.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.2.5; extra == "dev"
+Requires-Dist: black>=21.10b0; extra == "dev"
+Requires-Dist: mypy>=0.910; extra == "dev"
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Rubik's Cube ML Solver
+
+A machine learning project for solving Rubik's Cube using reinforcement learning.
+
+## Project Overview
+
+This project implements a reinforcement learning approach to solving the Rubik's Cube puzzle. It includes:
+
+- A representation of the Rubik's Cube state
+- Visualization of the cube in 3D
+- A reinforcement learning model
+- Training pipeline
+- Evaluation metrics
+- Demo script for showing solutions
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/rubiks-cube-ml.git
+cd rubiks-cube-ml
+
+# Create a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Training the Model
+
+```bash
+python -m rubiks_cube_ml.train
+```
+
+### Visualizing a Solution
+
+```bash
+python -m rubiks_cube_ml.demo
+```
+
+## Project Structure
+
+- `rubiks_cube_ml/` - Main package
+  - `cube/` - Cube representation and operations
+  - `visualization/` - 3D visualization of cube
+  - `model/` - Reinforcement learning model
+  - `training/` - Training pipeline
+  - `evaluation/` - Metrics and evaluation
+  - `demo.py` - Demonstration script
+
+## License
+
+MIT
