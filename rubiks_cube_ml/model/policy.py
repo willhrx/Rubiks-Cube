@@ -165,5 +165,145 @@ class GreedyPolicy:
                 if move_obj == move:
                     moves_applied.append(move_str)
                     break
-        
+
         return moves_applied
+
+
+class ResidualBlock(nn.Module):
+    """
+    Residual block with two linear layers and skip connection.
+
+    Architecture: x -> Linear -> BN -> ReLU -> Linear -> BN -> + x -> ReLU
+    """
+
+    def __init__(self, dim: int):
+        """
+        Initialize residual block.
+
+        Args:
+            dim: Dimension of input and output
+        """
+        super(ResidualBlock, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.BatchNorm1d(dim),
+            nn.ReLU(),
+            nn.Linear(dim, dim),
+            nn.BatchNorm1d(dim)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass with skip connection."""
+        return F.relu(x + self.layers(x))
+
+
+class ImprovedCubePolicy(nn.Module):
+    """
+    Improved policy network with residual connections (DeepCubeA style).
+
+    Architecture:
+    - Input embedding layer
+    - Multiple residual blocks
+    - Separate policy and value heads
+
+    This architecture is more expressive and trains more stably
+    than the simple MLP due to skip connections.
+    """
+
+    def __init__(self,
+                 state_dim: int = 6 * 3 * 3 * 6,
+                 hidden_dim: int = 4096,
+                 num_blocks: int = 4,
+                 num_actions: int = 12):
+        """
+        Initialize the improved policy network.
+
+        Args:
+            state_dim: Dimension of input state (324 for one-hot cube)
+            hidden_dim: Dimension of hidden layers
+            num_blocks: Number of residual blocks
+            num_actions: Number of possible actions (12 for standard moves)
+        """
+        super(ImprovedCubePolicy, self).__init__()
+
+        self.state_dim = state_dim
+        self.hidden_dim = hidden_dim
+        self.num_blocks = num_blocks
+        self.num_actions = num_actions
+
+        # Input embedding
+        self.input_embed = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU()
+        )
+
+        # Residual blocks
+        self.res_blocks = nn.ModuleList([
+            ResidualBlock(hidden_dim) for _ in range(num_blocks)
+        ])
+
+        # Policy head
+        self.policy_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.BatchNorm1d(hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, num_actions)
+        )
+
+        # Value head
+        self.value_head = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.BatchNorm1d(hidden_dim // 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim // 2, 1)
+        )
+
+        # Initialize weights
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize network weights."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+            elif isinstance(module, nn.BatchNorm1d):
+                nn.init.ones_(module.weight)
+                nn.init.zeros_(module.bias)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass of the network.
+
+        Args:
+            x: Input tensor of shape (batch_size, state_dim)
+
+        Returns:
+            Tuple of (action_probs, value)
+        """
+        # Input embedding
+        x = self.input_embed(x)
+
+        # Residual blocks
+        for block in self.res_blocks:
+            x = block(x)
+
+        # Policy output
+        policy_logits = self.policy_head(x)
+        action_probs = F.softmax(policy_logits, dim=-1)
+
+        # Value output
+        value = self.value_head(x)
+
+        return action_probs, value
+
+    def save(self, path: str):
+        """Save the model to a file."""
+        torch.save(self.state_dict(), path)
+
+    def load(self, path: str, device: str = 'cpu'):
+        """Load the model from a file."""
+        self.load_state_dict(torch.load(path, map_location=device))
+        self.eval()

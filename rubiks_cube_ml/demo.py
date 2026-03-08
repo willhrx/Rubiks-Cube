@@ -18,9 +18,9 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from .cube.cube import RubiksCube
-from .model.policy import CubePolicy, GreedyPolicy
-from .visualization.visualizer import CubeVisualizer
+from rubiks_cube_ml.cube.cube import RubiksCube
+from rubiks_cube_ml.model.policy import ImprovedCubePolicy, GreedyPolicy
+from rubiks_cube_ml.visualization.visualizer import CubeVisualizer
 
 
 def parse_args():
@@ -48,16 +48,16 @@ def main():
     # Parse arguments
     args = parse_args()
     
-    # Create the policy model
+    # Create the policy model (use ImprovedCubePolicy to match trained checkpoint)
     print(f"Loading model from {args.model}")
     state_dim = 6 * 3 * 3 * 6  # 6 faces × 3×3 positions × 6 colors
-    policy = CubePolicy(state_dim=state_dim)
-    
+    policy = ImprovedCubePolicy(state_dim=state_dim)
+
     # Load the model if it exists
     if os.path.exists(args.model):
-        checkpoint = torch.load(args.model, map_location=args.device)
-        policy.load_state_dict(checkpoint['policy_state_dict'])
-        print("Model loaded successfully!")
+        checkpoint = torch.load(args.model, weights_only=False)
+        policy.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Model loaded successfully! (iterations: {checkpoint.get('total_iterations', 'unknown')})")
     else:
         print(f"Warning: Model {args.model} not found. Using untrained model.")
     

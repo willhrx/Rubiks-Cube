@@ -4,38 +4,61 @@ from __future__ import annotations
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from typing import Dict, Tuple, List, Any, Optional
+from typing import Dict, Tuple, List, Any, Optional, TYPE_CHECKING
 
 from ..cube.cube import RubiksCube
 from ..cube.moves import MOVES
+
+if TYPE_CHECKING:
+    from ..training.curriculum import CurriculumManager
+    from ..cube.state_features import RewardShaper
 
 
 class RubiksCubeEnv(gym.Env):
     """
     Reinforcement learning environment for the Rubik's Cube.
-    
+
     This environment follows the OpenAI Gym interface, allowing
     reinforcement learning algorithms to train on solving the Rubik's Cube.
+
+    Supports optional curriculum learning and reward shaping.
     """
-    
+
     metadata = {"render_modes": ["human", "rgb_array"]}
-    
-    def __init__(self, max_steps: int = 50, scramble_steps: int = 20, render_mode: Optional[str] = None):
+
+    def __init__(self,
+                 max_steps: int = 50,
+                 scramble_steps: int = 20,
+                 render_mode: Optional[str] = None,
+                 curriculum_manager: Optional['CurriculumManager'] = None,
+                 reward_shaper: Optional['RewardShaper'] = None,
+                 use_shaped_rewards: bool = False):
         """
         Initialize the environment.
 
         Args:
             max_steps: Maximum number of steps per episode
             scramble_steps: Number of random moves to scramble the cube
+                           (ignored if curriculum_manager is provided)
             render_mode: The render mode ('human' or 'rgb_array')
+            curriculum_manager: Optional curriculum manager for adaptive difficulty
+            reward_shaper: Optional reward shaper for dense rewards
+            use_shaped_rewards: Whether to use shaped rewards
         """
         super(RubiksCubeEnv, self).__init__()
         self.render_mode = render_mode
-        
+
         self.cube = RubiksCube()
         self.max_steps = max_steps
         self.scramble_steps = scramble_steps
         self.step_count = 0
+
+        # Curriculum learning
+        self.curriculum_manager = curriculum_manager
+
+        # Reward shaping
+        self.reward_shaper = reward_shaper
+        self.use_shaped_rewards = use_shaped_rewards
         
         # Define action space (12 moves: R, R', L, L', U, U', D, D', F, F', B, B')
         # Note: Double moves (R2, L2, etc.) are excluded as they can be achieved
@@ -59,7 +82,8 @@ class RubiksCubeEnv(gym.Env):
 
         Args:
             seed: Random seed for reproducibility
-            options: Additional options (unused)
+            options: Additional options:
+                - scramble_steps: Override the number of scramble steps
 
         Returns:
             Tuple of (initial observation, info dict)
@@ -69,10 +93,23 @@ class RubiksCubeEnv(gym.Env):
         self.cube = RubiksCube()
         self.step_count = 0
 
-        # Scramble the cube
-        self.cube.scramble(self.scramble_steps)
+        # Determine scramble depth
+        if options and 'scramble_steps' in options:
+            scramble_depth = options['scramble_steps']
+        elif self.curriculum_manager is not None:
+            scramble_depth = self.curriculum_manager.get_scramble_depth()
+        else:
+            scramble_depth = self.scramble_steps
 
-        return self._get_observation(), {}
+        # Scramble the cube
+        self.cube.scramble(scramble_depth)
+
+        # Initialize reward shaper if present
+        if self.reward_shaper is not None:
+            self.reward_shaper.reset(self.cube)
+
+        info = {'scramble_depth': scramble_depth}
+        return self._get_observation(), info
     
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """
@@ -102,14 +139,34 @@ class RubiksCubeEnv(gym.Env):
         terminated = solved
         truncated = not solved and self.step_count >= self.max_steps
 
-        # Calculate reward
+        # Calculate base reward
         if solved:
-            reward = 10.0  # High reward for solving the cube
+            base_reward = 10.0  # High reward for solving the cube
         else:
             # Negative reward for each step to encourage shorter solutions
-            reward = -0.1
+            base_reward = -0.1
 
-        info = {"solved": solved, "steps": self.step_count}
+        # Apply reward shaping if enabled
+        if self.use_shaped_rewards and self.reward_shaper is not None:
+            reward = self.reward_shaper.compute_shaped_reward(
+                self.cube, base_reward, terminated or truncated
+            )
+        else:
+            reward = base_reward
+
+        # Record episode result for curriculum
+        if (terminated or truncated) and self.curriculum_manager is not None:
+            self.curriculum_manager.record_episode(solved)
+
+        info = {
+            "solved": solved,
+            "steps": self.step_count,
+            "base_reward": base_reward
+        }
+
+        # Add state features to info if reward shaper is available
+        if self.reward_shaper is not None:
+            info["features"] = self.reward_shaper.get_features(self.cube)
 
         return self._get_observation(), reward, terminated, truncated, info
     
