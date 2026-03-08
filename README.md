@@ -51,7 +51,4 @@ python -m rubiks_cube_ml.demo
   - `training/` - Training pipeline
   - `evaluation/` - Metrics and evaluation
   - `demo.py` - Demonstration script
-
-## License
-
-MIT
+  
